@@ -72,7 +72,7 @@ def main():
     today = datetime.today()
 
     # 1.2.1. PLATFORM = facebook (keep original logic)
-    if PLATFORM == "facebook":
+    if PLATFORM == "google":
         try:
             update_campaign_insights = update_module.update_campaign_insights
             update_ad_insights = update_module.update_ad_insights
