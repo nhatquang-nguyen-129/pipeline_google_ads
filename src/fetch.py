@@ -1,20 +1,145 @@
-from google.ads.googleads.client import GoogleAdsClient
-from google.cloud import secretmanager
-import pandas as pd
+"""
+==================================================================
+GOOGLE FETCHING MODULE
+------------------------------------------------------------------
+This module is responsible for direct, authenticated access to the 
+Google Ads API, encapsulating all logic required to 
+fetch raw campaign, ad, creative, and metadata records.
+
+It provides a clean interface to centralize API-related operations, 
+enabling reusable, testable, and isolated logic for data ingestion 
+pipelines without mixing transformation or storage responsibilities.
+
+✔️ Initializes secure Google Ads Client and retrieves credentials dynamically  
+✔️ Fetches data via API calls (with pagination) and returns structured DataFrames  
+✔️ Does not handle Google BigQuery upload, schema validation, or enrichment logic
+
+⚠️ This module focuses only on *data retrieval from the API*. 
+It does not handle schema validation, data transformation, or 
+storage operations such as uploading to BigQuery.
+==================================================================
+"""
+# Add root directory to sys.path for absolute imports of internal modules
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+
+# Add logging ultilities for integraton
 import logging
-import time
+
+# Add JSON ultilities for integration
 import json
 
-from google.ads.googleads.client import GoogleAdsClient
-from google.cloud import secretmanager
+# Add Python Pandas libraries for integration
 import pandas as pd
-import logging
+
+# Add time ultilities for integration
 import time
-import json
 
-PROJECT = "your-gcp-project"
-SECRET_ID = "google_ads_credentials"
+# Add Google Ads modules for integration
+from google.ads.googleads.client import GoogleAdsClient
 
+# Add Google Secret Manager modules for integration
+from google.cloud import secretmanager
+
+# Get environment variable for Company
+COMPANY = os.getenv("COMPANY") 
+
+# Get environment variable for Google Cloud Project ID
+PROJECT = os.getenv("PROJECT")
+
+# Get environment variable for Platform
+PLATFORM = os.getenv("PLATFORM")
+
+# Get environmetn variable for Department
+DEPARTMENT = os.getenv("DEPARTMENT")
+
+# Get environment variable for Account
+ACCOUNT = os.getenv("ACCOUNT")
+
+# Get nvironment variable for Layer
+LAYER = os.getenv("LAYER")
+
+# Get environment variable for Mode
+MODE = os.getenv("MODE")
+
+# 1. FETCH GOOGLE ADS METADATA
+
+# 1.1. Fetch Google Ads campaign metadata
+def fetch_campaign_metadata(
+    customer_id: str,
+    campaign_id_list: list[str] = None,
+    fields: list[str] = None
+) -> pd.DataFrame:
+    print(f"🚀 [FETCH] Starting to fetch Google Ads campaign metadata for customer_id {customer_id}...")
+    logging.info(f"🚀 [FETCH] Starting to fetch Google Ads campaign metadata for customer_id {customer_id}...")
+
+    # 2.1.1. Chuẩn bị fields mặc định
+    default_fields = [
+        "campaign.id",
+        "campaign.name",
+        "campaign.status",
+        "campaign.advertising_channel_type",
+        "campaign.advertising_channel_sub_type",
+        "campaign.serving_status",
+        "campaign.start_date",
+        "campaign.end_date"
+    ]
+    fetch_fields = fields if fields else default_fields
+    all_records = []
+
+    try:
+        # 2.1.2. Load credentials từ Secret Manager
+        secret_client = secretmanager.SecretManagerServiceClient()
+        secret_name = f"projects/{PROJECT}/secrets/{SECRET_ID}/versions/latest"
+        response = secret_client.access_secret_version(request={"name": secret_name})
+        creds = json.loads(response.payload.data.decode("utf-8"))
+        client = GoogleAdsClient.load_from_dict(creds, version="v16")
+
+        # 2.1.3. Build query GAQL
+        query = f"SELECT {', '.join(fetch_fields)} FROM campaign"
+        if campaign_id_list:  # Selective flow nếu có danh sách campaign_id
+            ids_str = ",".join([str(cid) for cid in campaign_id_list])
+            query += f" WHERE campaign.id IN ({ids_str})"
+
+        print(f"🔍 [FETCH] Preparing to fetch Google Ads campaign metadata with query: {query}")
+        logging.info("🔍 [FETCH] Preparing to fetch Google Ads campaign metadata with query.")
+
+        ga_service = client.get_service("GoogleAdsService")
+        response = ga_service.search(customer_id=customer_id, query=query)
+
+        # 2.1.4. Convert to dataframe
+        for row in response:
+            record = {
+                "campaign_id": row.campaign.id,
+                "campaign_name": row.campaign.name,
+                "status": row.campaign.status.name,
+                "channel_type": row.campaign.advertising_channel_type.name,
+                "channel_sub_type": row.campaign.advertising_channel_sub_type.name,
+                "serving_status": row.campaign.serving_status.name,
+                "start_date": row.campaign.start_date,
+                "end_date": row.campaign.end_date,
+            }
+            all_records.append(record)
+
+        if not all_records:
+            print("⚠️ [FETCH] No Google Ads campaign metadata returned.")
+            logging.warning("⚠️ [FETCH] No Google Ads campaign metadata returned.")
+            return pd.DataFrame()
+
+        df = pd.DataFrame(all_records)
+        print(f"✅ [FETCH] Successfully fetched {len(df)} campaign metadata records.")
+        logging.info(f"✅ [FETCH] Successfully fetched {len(df)} campaign metadata records.")
+        return df
+
+    except Exception as e:
+        print(f"❌ [FETCH] Failed to fetch Google Ads campaign metadata: {e}")
+        logging.error(f"❌ [FETCH] Failed to fetch Google Ads campaign metadata: {e}")
+        return pd.DataFrame()
+
+# 2. FETCH GOOGLE ADS INSIGHTS
+
+# 2.2. Fetch Google Ads campaign insights (metrics only)
 def fetch_campaign_insights(customer_id: str, start_date: str, end_date: str) -> pd.DataFrame:
     print(f"🚀 [FETCH] Starting to fetch Google Ads campaign insights from {start_date} to {end_date}...")
     logging.info(f"🚀 [FETCH] Starting to fetch Google Ads campaign insights from {start_date} to {end_date}...")
@@ -33,14 +158,13 @@ def fetch_campaign_insights(customer_id: str, start_date: str, end_date: str) ->
         print("✅ [FETCH] Successfully initialized Google Ads client.")
         logging.info("✅ [FETCH] Successfully initialized Google Ads client.")
 
-        # 2. Define query
+        # 2. Define query (metrics only)
         query = f"""
             SELECT
                 campaign.id,
-                campaign.name,
-                campaign.status,
                 metrics.impressions,
                 metrics.clicks,
+                metrics.conversions,
                 metrics.cost_micros,
                 segments.date
             FROM campaign
@@ -63,12 +187,11 @@ def fetch_campaign_insights(customer_id: str, start_date: str, end_date: str) ->
                 for row in response:
                     records.append({
                         "campaign_id": row.campaign.id,
-                        "campaign_name": row.campaign.name,
-                        "status": row.campaign.status.name,
+                        "date": row.segments.date,
                         "impressions": row.metrics.impressions,
                         "clicks": row.metrics.clicks,
+                        "conversions": row.metrics.conversions,
                         "cost_micros": row.metrics.cost_micros,
-                        "date": row.segments.date,
                     })
 
                 if not records:
@@ -79,7 +202,6 @@ def fetch_campaign_insights(customer_id: str, start_date: str, end_date: str) ->
                 df = pd.DataFrame(records)
                 print(f"✅ [FETCH] Successfully retrieved {len(df)} row(s) from Google Ads.")
                 logging.info(f"✅ [FETCH] Successfully retrieved {len(df)} row(s) from Google Ads.")
-
                 return df
 
             except Exception as e_inner:
@@ -93,4 +215,3 @@ def fetch_campaign_insights(customer_id: str, start_date: str, end_date: str) ->
         print(f"❌ [FETCH] Failed to fetch Google Ads campaign insights: {e_outer}")
         logging.error(f"❌ [FETCH] Failed to fetch Google Ads campaign insights: {e_outer}")
         return pd.DataFrame()
-
