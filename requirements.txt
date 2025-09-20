@@ -2,6 +2,7 @@ pandas==2.3.2
 numpy==2.3.1
 gspread==6.2.1
 pytz==2025.2
+google-ads==28.0.0
 google-auth==2.40.3
 google-api-core==2.25.1
 google-cloud-bigquery==3.36.0
