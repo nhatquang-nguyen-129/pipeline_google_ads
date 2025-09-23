@@ -38,6 +38,17 @@ import time
 
 # Add Google Ads modules for integration
 from google.ads.googleads.client import GoogleAdsClient
+from google.ads.googleads.errors import GoogleAdsException
+
+# Add Google Authentication libraries for integration
+from google.api_core.exceptions import (
+    GoogleAPICallError,
+    NotFound,
+    PermissionDenied, 
+)
+from google.auth import default
+from google.auth.exceptions import DefaultCredentialsError
+from google.auth.transport.requests import AuthorizedSession
 
 # Add Google Secret Manager modules for integration
 from google.cloud import secretmanager
@@ -72,7 +83,6 @@ MODE = os.getenv("MODE")
 def fetch_campaign_metadata(campaign_id_list: list[str]) -> pd.DataFrame:
     print(f"🚀 [FETCH] Starting to fetch Google Ads campaign metadata for {len(campaign_id_list)} campaign_id(s)...")
     logging.info(f"🚀 [FETCH] Starting to fetch Google Ads campaign metadata for {len(campaign_id_list)} campaign_id(s)...")
-
     
     # 1.1.1. Validate input
     if not campaign_id_list:
@@ -101,36 +111,52 @@ def fetch_campaign_metadata(campaign_id_list: list[str]) -> pd.DataFrame:
         try:
             print(f"🔍 [FETCH] Initializing Google Secret Manager client for Google Cloud Platform project {PROJECT}...")
             logging.info(f"🔍 [FETCH] Initializing Google Secret Manager client for Google Cloud Platform project {PROJECT}...")
-            secret_client = secretmanager.SecretManagerServiceClient()
-            print(f"✅ [FETCH] Initialized Google Secret Manager client for Google Cloud Platform project {PROJECT}.")
-            logging.info(f"✅ [FETCH] Initialized Google Secret Manager client for Google Cloud Platform project {PROJECT}.")
+            google_secret_client = secretmanager.SecretManagerServiceClient()
+            print(f"✅ [FETCH] Successfully initialized Google Secret Manager client for Google Cloud project {PROJECT}.")
+            logging.info(f"✅ [FETCH] Successfully initialized Google Secret Manager client for Google Cloud project {PROJECT}.")
+        except DefaultCredentialsError as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Secret Manager client due to credentials error.") from e
+        except PermissionDenied as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Secret Manager client due to permission denial.") from e
+        except NotFound as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Secret Manager client because secret not found.") from e
+        except GoogleAPICallError as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Secret Manager client due to API call error.") from e
         except Exception as e:
-            print(f"❌ [FETCH] Failed to initialize Google Secret Manager client due to {e}.")
-            logging.error(f"❌ [FETCH] Failed to initialize Google Secret Manager client due to {e}.")
-            return pd.DataFrame()
+            raise RuntimeError(f"❌ [FETCH] Failed to initialize Google Secret Manager client due to unexpected error {e}.") from e
 
-    # 2.1.3. Initialize Google Ads client
+    # 1.1.2. Prepare Google Secret id(s)
+        print(f"🔍 [FETCH] Retrieving Google Ads ad account information for {ACCOUNT} from Google Secret Manager...")
+        logging.info(f"🔍 [FETCH] Retrieving Google Ads ad account information for {ACCOUNT} from Google Secret Manager...")
+        google_secret_id = f"{COMPANY}_secret_{DEPARTMENT}_{PLATFORM}_account_id_{ACCOUNT}"
+        google_secret_name = f"projects/{PROJECT}/secrets/{google_secret_id}/versions/latest" 
+        response = google_secret_client.access_secret_version(request={"name": google_secret_name})
+        creds = json.loads(response.payload.data.decode("utf-8"))
+        customer_id = creds["customer_id"]
+        print(f"✅ [FETCH] Successfully retrieved Google Ads customer_id {customer_id} from Google Secret Manager secret_id {google_secret_id} for account environment variable {ACCOUNT}.")
+        logging.info(f"✅ [FETCH] Successfully retrieved Google Ads customer_id {customer_id} from Google Secret Manager secret_id {google_secret_id} for account environment variable {ACCOUNT}.")
+    
+    # 1.1.3. Initialize Google Ads client
         try:
-            print(f"🔍 [FETCH] Retrieving Google Ads ad account information for {ACCOUNT} from Google Secret Manager...")
-            logging.info(f"🔍 [FETCH] Retrieving Google Ads ad account information for {ACCOUNT} from Google Secret Manager...") 
-            google_secret_id = f"{COMPANY}_secret_{DEPARTMENT}_{PLATFORM}_account_id_{ACCOUNT}"
-            google_secret_name = f"projects/{PROJECT}/secrets/{google_secret_id}/versions/latest"
-            print(f"✅ [FETCH] Successfully retrieved Google Ads account secret_id {google_secret_id} for account environment variable {ACCOUNT} from Google Secret Manager.")
-            logging.info(f"✅ [FETCH] Successfully retrieved Google Ads account secret_id {google_secret_id} for account environment variable {ACCOUNT} from Google Secret Manager.")   
-            response = secret_client.access_secret_version(request={"name": google_secret_name})
-            creds = json.loads(response.payload.data.decode("utf-8"))
-            customer_id = creds["customer_id"]
             print(f"🔍 [FETCH] Initializing Google Ads client for customer_id {customer_id} from Google Secret Manager account secret_id {google_secret_id}...")
             logging.info(f"🔍 [FETCH] Initializing Google Ads client for customer_id {customer_id} from Google Secret Manager account secret_id {google_secret_id}...")
             google_ads_client = GoogleAdsClient.load_from_dict(creds, version="v16")
             print(f"✅ [FETCH] Successfully initialized Google Ads client for customer_id {customer_id}.")
             logging.info(f"✅ [FETCH] Successfully initialized Google Ads client for customer_id {customer_id}.")
+        except DefaultCredentialsError as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Ads client due to credentials error.") from e
+        except PermissionDenied as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Ads client due to permission denial.") from e
+        except NotFound as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Ads client because a resource not found.") from e
+        except GoogleAdsException as e:
+            raise RuntimeError(f"❌ [FETCH] Failed to initialize Google Ads client due to {e.error.code} when API responded.") from e
+        except GoogleAPICallError as e:
+            raise RuntimeError(f"❌ [FETCH] Failed to initialize Google Ads client due to {e} when API not responed.") from e
         except Exception as e:
-            print(f"❌ [FETCH] Failed to initialize Google Ads client due to {e}.")
-            logging.error(f"❌ [FETCH] Failed to initialize Google Ads client due to {e}.")
-            return pd.DataFrame()
+            raise RuntimeError(f"❌ [FETCH] Failed to initialize Google Ads client due to unexpected error {e}.") from e
 
-    # 2.1.4. Loop through campaign_id(s)
+    # 1.1.4. Loop through campaign_id(s)
         try:
             print(f"🔍 [FETCH] Retrieving campaign metadata for {len(campaign_id_list)} Google Ads campaign_id(s)...")
             logging.info(f"🔍 [FETCH] Retrieving campaign metadata for {len(campaign_id_list)} Google Ads campaign_id(s)...")
@@ -156,7 +182,7 @@ def fetch_campaign_metadata(campaign_id_list: list[str]) -> pd.DataFrame:
             logging.error(f"❌ [FETCH] Failed to campaign metadata for Google Ads due to {e}.")
             return pd.DataFrame()
 
-    # 2.1.5. Convert to Python DataFrame
+    # 1.1.5. Convert to Python DataFrame
         if not all_records:
             print("⚠️ [FETCH] No Google Ads campaign metadata fetched.")
             logging.warning("⚠️ [FETCH] No Google Ads campaign metadata fetched.")
@@ -186,34 +212,52 @@ def fetch_campaign_insights(customer_id: str, start_date: str, end_date: str) ->
 
     try:
     # 2.1.1. Initialize Google Secret Manager client
-        try: 
+        try:
             print(f"🔍 [FETCH] Initializing Google Secret Manager client for Google Cloud Platform project {PROJECT}...")
             logging.info(f"🔍 [FETCH] Initializing Google Secret Manager client for Google Cloud Platform project {PROJECT}...")
             google_secret_client = secretmanager.SecretManagerServiceClient()
-            print(f"✅ [FETCH] Successfuly initialized Google Secret Manager client for Google Cloud Platform project {PROJECT}.")
-            logging.info(f"✅ [FETCH] Successfuly initialized Google Secret Manager client for Google Cloud Platform project {PROJECT}.")
+            print(f"✅ [FETCH] Successfully initialized Google Secret Manager client for Google Cloud project {PROJECT}.")
+            logging.info(f"✅ [FETCH] Successfully initialized Google Secret Manager client for Google Cloud project {PROJECT}.")
+        except DefaultCredentialsError as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Secret Manager client due to credentials error.") from e
+        except PermissionDenied as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Secret Manager client due to permission denial.") from e
+        except NotFound as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Secret Manager client because secret not found.") from e
+        except GoogleAPICallError as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Secret Manager client due to API call error.") from e
         except Exception as e:
-            print(f"❌ [FETCH] Failed to initialze Google Secret Manager client due to {e}.")
-            logging.error(f"❌ [FETCH] Failed to initialze Google Secret Manager client due to {e}.")
+            raise RuntimeError(f"❌ [FETCH] Failed to initialize Google Secret Manager client due to unexpected error {e}.") from e
+    
+    # 2.1.2. Prepare Google Secret Manager id(s)
+        print(f"🔍 [FETCH] Retrieving Google Ads ad account information for {ACCOUNT} from Google Secret Manager...")
+        logging.info(f"🔍 [FETCH] Retrieving Google Ads ad account information for {ACCOUNT} from Google Secret Manager...") 
+        google_secret_id = f"{COMPANY}_secret_{DEPARTMENT}_{PLATFORM}_account_id_{ACCOUNT}"
+        google_secret_name = f"projects/{PROJECT}/secrets/{google_secret_id}/versions/latest"
+        response = google_secret_client.access_secret_version(request={"name": google_secret_name})
+        creds = json.loads(response.payload.data.decode("utf-8"))
+        print(f"✅ [FETCH] Successfully retrieved Google Ads account secret_id {google_secret_id} for account environment variable {ACCOUNT} from Google Secret Manager.")
+        logging.info(f"✅ [FETCH] Successfully retrieved Google Ads account secret_id {google_secret_id} for account environment variable {ACCOUNT} from Google Secret Manager.")   
     
     # 2.1.2. Initialize Google Ads client
         try:
-            print(f"🔍 [FETCH] Retrieving Google Ads ad account information for {ACCOUNT} from Google Secret Manager...")
-            logging.info(f"🔍 [FETCH] Retrieving Google Ads ad account information for {ACCOUNT} from Google Secret Manager...") 
-            google_secret_id = f"{COMPANY}_secret_{DEPARTMENT}_{PLATFORM}_account_id_{ACCOUNT}"
-            google_secret_name = f"projects/{PROJECT}/secrets/{google_secret_id}/versions/latest"
-            print(f"✅ [FETCH] Successfully retrieved Google Ads account secret_id {google_secret_id} for account environment variable {ACCOUNT} from Google Secret Manager.")
-            logging.info(f"✅ [FETCH] Successfully retrieved Google Ads account secret_id {google_secret_id} for account environment variable {ACCOUNT} from Google Secret Manager.")   
-            response = google_secret_client.access_secret_version(request={"name": google_secret_name})
-            creds = json.loads(response.payload.data.decode("utf-8"))
             print(f"🔍 [FETCH] Initializing Google Ads client for customer_id {customer_id} from Google Secret Manager account secret_id {google_secret_id}...")
             logging.info(f"🔍 [FETCH] Initializing Google Ads client for customer_id {customer_id} from Google Secret Manager account secret_id {google_secret_id}...")
             google_ads_client = GoogleAdsClient.load_from_dict(creds, version="v16")
             print(f"✅ [FETCH] Successfully initialized Google Ads client for customer_id {customer_id}.")
             logging.info(f"✅ [FETCH] Successfully initialized Google Ads client for customer_id {customer_id}.")
+        except DefaultCredentialsError as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Ads client due to credentials error.") from e
+        except PermissionDenied as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Ads client due to permission denial.") from e
+        except NotFound as e:
+            raise RuntimeError("❌ [FETCH] Failed to initialize Google Ads client because a resource not found.") from e
+        except GoogleAdsException as e:
+            raise RuntimeError(f"❌ [FETCH] Failed to initialize Google Ads client due to {e.error.code} when API responded.") from e
+        except GoogleAPICallError as e:
+            raise RuntimeError(f"❌ [FETCH] Failed to initialize Google Ads client due to {e} when API not responed.") from e
         except Exception as e:
-            print(f"❌ [FETCH] Failed to initialze Google Ads client due to {e}.")
-            logging.error(f"❌ [FETCH] Failed to initialze Google Ads client due to {e}.")
+            raise RuntimeError(f"❌ [FETCH] Failed to initialize Google Ads client due to unexpected error {e}.") from e
 
     # 2.1.3. Define parameter(s) and field(s)
         query = f"""
@@ -227,8 +271,8 @@ def fetch_campaign_insights(customer_id: str, start_date: str, end_date: str) ->
             FROM campaign
             WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
         """
-        print(f"🔍 [FETCH] Preparing Google Ads API query {query}")
-        logging.info(f"🔍 [FETCH] Preparing Google Ads API query.")
+        print(f"🔍 [FETCH] Preparing Google Ads API query {query}...")
+        logging.info(f"🔍 [FETCH] Preparing Google Ads API query {query}...")
         google_ads_service = google_ads_client.get_service("GoogleAdsService")
 
     # 2.1.4. Make Google Ads API call
