@@ -7,6 +7,7 @@ sys.path.append(str(ROOT_FOLDER_LOCATION))
 import argparse
 from datetime import datetime
 import json
+import traceback
 
 from google.cloud import secretmanager
 from google.api_core.client_options import ClientOptions
@@ -200,11 +201,17 @@ def backfill():
 
     # Entrypoint
 if __name__ == "__main__":
-    
+
     try:
-    
+
         backfill()
-    
+
     except Exception:
-    
+
+        print(
+            "❌ [BACKFILL] Failed to execute Google Ads backfill due to..."
+        )
+
+        traceback.print_exc()
+
         sys.exit(1)
