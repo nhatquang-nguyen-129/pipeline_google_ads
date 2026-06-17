@@ -23,30 +23,45 @@ def transform_campaign_insights(
             Enforced campaign insights records
     """
 
+    # Validate input
     print(
-        "🔄 [TRANSFORM] Transforming Google Ads campaign insights with "
-        f"{len(df)} row(s)..."
+        "🔄 [TRANSFORM] Validating column(s) for "
+        f"{len(df)} row(s) of Google Ads campaign insights..."
     )
 
     if df.empty:
-        
-        print(
-            "⚠️ [TRANSFORM] Empty campaign insights then transformation will be suspended."
-        )
 
-        return df
+        raise ValueError(
+            "❌ [TRANSFORM] Failed to validate column(s) for Google Ads campaign insights due to empty input DataFrame."
+        )
 
     required_cols = {"date"}
 
-    missing = required_cols - set(df.columns)
-    
-    if missing:
-    
-        raise ValueError(
-            "❌ [TRANSFORM] Failed to transform Google Ads campaign insights due to missing columns "
-            f"{missing} then transformation will be suspended."
-        )
+    actual_cols = {
+        str(col).strip()
+        for col in df.columns
+    }
 
+    missing_cols = required_cols - actual_cols
+
+    extra_cols = actual_cols - required_cols
+
+    print(
+        "✅ [TRANSFORM] Successfully validated DataFrame for Google Ads campaign insights with "
+        f"{df.shape} shape with total column(s) "
+        f"{len(actual_cols)}/{len(required_cols)} total column including "
+        f"{len(missing_cols)} missing column(s) and "
+        f"{len(extra_cols)} extra column(s)."
+    )
+
+    if missing_cols:
+
+        raise ValueError(
+            "❌ [TRANSFORM] Failed to transform validated DataFrame for Google Ads campaign insights due to missing required column(s) "
+            f"{sorted(missing_cols)}"
+        )
+    
+    # Parse columns
     df = df.copy()
     
     df["customer_id"] = df["customer_id"].astype(str)
