@@ -12,7 +12,11 @@
 
 - Accept `start_date` and `end_date` via argparse for flexible time-based backfill execution
 
+---
+
 ## Execution
+
+### Windows
 
 - Ensure Google Cloud Platform's Application Default Credentials already configured
 
@@ -22,6 +26,22 @@ $env:PROJECT="your-gcp-project"
 $env:COMPANY="your-company-in-short"
 $env:DEPARTMENT="your-department"
 $env:ACCOUNT="your-account"
+
+python -m backfill.backfill_google_ads --start_date=YYYY-MM-DD --end_date=YYYY-MM-DD
+```
+
+---
+
+# MacOS
+
+- Ensure Google Cloud Platform's Application Default Credentials already configured
+
+- Run Backfill for Google Ads campaign insights with specific date range using CLI
+```bash
+export PROJECT="your-gcp-project"
+export COMPANY="your-company-in-short"
+export DEPARTMENT="your-department"
+export ACCOUNT="your-account"
 
 python -m backfill.backfill_google_ads --start_date=YYYY-MM-DD --end_date=YYYY-MM-DD
 ```
