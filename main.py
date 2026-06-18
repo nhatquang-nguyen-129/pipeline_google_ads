@@ -214,15 +214,17 @@ def main():
 
     # Entrypoint
 if __name__ == "__main__":
-    
+
     try:
-    
+
         main()
-    
-    except Exception as e:
-        
-        print(f"{e}")
-        
+
+    except Exception:
+
+        print(
+            "❌ [MAIN] Failed to execute Google Ads main entrypoint due to..."
+        )
+
         traceback.print_exc()
-        
+
         sys.exit(1)
