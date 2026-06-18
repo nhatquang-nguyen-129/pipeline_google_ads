@@ -22,7 +22,7 @@ class internalGoogleBigqueryLoader:
         2. Check dataset existence
         3. Check table existence
         4. Apply INSERT/UPSERT DML
-        5. Write data into table
+        5. Writer data into table
     ---
     Returns:
         None
@@ -219,7 +219,16 @@ class internalGoogleBigqueryLoader:
 
             try:
 
-                if pd.api.types.is_integer_dtype(dtype):
+                # Priority strings ID columns
+                if col.lower().endswith("_id") or col.lower() in ["id"]:
+
+                    print(
+                        f"⚠️ [PLUGIN] Column {col} detected as ID field then forcing to STRING type..."
+                    )
+
+                    bq_type = "STRING"
+
+                elif pd.api.types.is_integer_dtype(dtype):
                     
                     bq_type = "INT64"
 
@@ -282,6 +291,7 @@ class internalGoogleBigqueryLoader:
                             sample_str = sample_str.replace("", pd.NA).dropna()
 
                             if sample_str.empty:
+                                
                                 bq_type = "STRING"
 
                             else:
@@ -335,12 +345,7 @@ class internalGoogleBigqueryLoader:
                     f"{col} with dtype "
                     f"{dtype} due to "
                     f"{e}."
-                )
-
-        print(
-            "✅ [PLUGIN] Successfully inferred DataFrame schema for "
-            f"{len(df)} row(s)."
-        )
+                ) from e
 
         return schema
 
@@ -389,7 +394,15 @@ class internalGoogleBigqueryLoader:
         
         try:
 
-            schema = self._infer_df_schema(df)
+            try:
+                
+                schema = self._infer_df_schema(df)
+            
+            except Exception as e:
+            
+                raise RuntimeError(
+                    "❌ [PLUGIN] Failed to create Google BigQuery table due to schema inference failure."
+                ) from e
 
             print(
                 "🔍 [PLUGIN] Creating Google BigQuery table "
