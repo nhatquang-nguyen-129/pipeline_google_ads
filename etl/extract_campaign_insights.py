@@ -42,6 +42,7 @@ def extract_campaign_insights(
     }
 
     try:
+        
         print(
             "🔍 [EXTRACT] Initializing Google Ads client for customer_id "
             f"{customer_id}..."
