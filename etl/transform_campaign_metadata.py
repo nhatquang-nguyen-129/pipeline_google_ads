@@ -23,6 +23,7 @@ def transform_campaign_metadata(
             Enforced campaign metadata records
     """
 
+    # Validate input
     print(
         "🔄 [TRANSFORM] Validating column(s) for "
         f"{len(df)} row(s) of Google Ads campaign metadata..."
