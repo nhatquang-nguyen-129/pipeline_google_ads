@@ -26,15 +26,15 @@ def extract_campaign_metadata(
     ---
     Returns:
         1. pandas.DataFrame:
-            Flattened campaign metadata records
+            Flattened Google Ads campaign metadata records
     """
 
     # Validate input
     if not campaign_id_list:
         
         print(
-            "⚠️ [EXTRACT] No input campaign_id found for Google Ads customer_id "
-            f"{customer_id} then extraction will be suspended."
+            "⚠️ [EXTRACT] Failed to extract Google Ads campaign metadata for customer_id "
+            f"{customer_id} due to no input campaign_ids then extraction will be suspended."
         )
         
         return pd.DataFrame()
@@ -118,6 +118,12 @@ def extract_campaign_metadata(
             })
 
         df = pd.DataFrame(rows)
+
+        print(
+            "✅ [EXTRACT] Successfully extracted Google Ads campaign metadata for customer_id "
+            f"{customer_id} with "
+            f"{len(df)}/{len(campaign_id_list)} row(s)."
+        )
 
         return df
 

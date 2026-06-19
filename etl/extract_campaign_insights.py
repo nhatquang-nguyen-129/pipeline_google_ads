@@ -28,7 +28,7 @@ def extract_campaign_insights(
     ---
     Returns:
         1. pandas.DataFrame:
-            Flattened campaign insight records
+            Flattened Google Ads campaign insight records
     """
 
     # Initialize Google Ads client
@@ -42,6 +42,7 @@ def extract_campaign_insights(
     }
 
     try:
+        
         print(
             "🔍 [EXTRACT] Initializing Google Ads client for customer_id "
             f"{customer_id}..."
@@ -126,8 +127,11 @@ def extract_campaign_insights(
         df = pd.DataFrame(rows)
 
         print(
-            "✅ [EXTRACT] Successfully extracted "
-            f"{len(df)} row(s) of Google Ads campaign insights with "
+            "✅ [EXTRACT] Successfully extracted Google Ads campaign insights with "
+            f"{len(df)} row(s) for customer_id "
+            f"{customer_id} from "
+            f"{start_date} to "
+            f"{end_date} with "
             f"{batch_count} batch(es)."
         )
 

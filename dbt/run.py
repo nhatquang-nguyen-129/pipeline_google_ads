@@ -35,7 +35,7 @@ def dbt_google_ads(
 
     print(
         f"🔄 [DBT] Executing dbt build for Google Ads "
-        f"{select} to Google Cloud Project "
+        f"{select} selector to Google Cloud Project "
         f"{google_cloud_project}..."
     )
 
@@ -61,22 +61,22 @@ def dbt_google_ads(
 
             raise RuntimeError(
                 "❌ [DBT] Failed to execute dbt build for Google Ads "
-                f"{select} to Google Cloud Project "
+                f"{select} selector to Google Cloud Project "
                 f"{google_cloud_project} with return code "
                 f"{process.returncode}."
             )
 
         print(
             f"✅ [DBT] Successfully executed dbt build for Google Ads "
-            f"{select} to Google Cloud Project "
+            f"{select} selector to Google Cloud Project "
             f"{google_cloud_project}."
         )
 
     except Exception as e:
         
         raise RuntimeError(
-            "❌ [DBT] Unexpected error while executing dbt build for Google Ads "
-            f"{select} to Google Cloud Project "
+            "❌ [DBT] Failed to execute dbt build for Google Ads "
+            f"{select} selector to Google Cloud Project "
             f"{google_cloud_project} due to "
             f"{e}."
         ) from e
