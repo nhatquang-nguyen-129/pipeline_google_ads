@@ -50,7 +50,7 @@
 
 - The transformer enriches a constant platform column with value `Google`
 
-- The transformer parses `campaign_name` using underscore `_` delimiter to derive structured dimensions
+- The transformer parses `campaign_name` using underscore `|` delimiter to derive structured dimensions
 
 - The transformer fills missing parsed values with `unknown` to preserve schema consistency
 
